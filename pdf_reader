@@ -1,0 +1,80 @@
+import fitz  # PyMuPDF
+import PyPDF2
+import io
+import pandas as pd
+
+def extract_text_from_pdf(file_path):
+    text = ""
+    with fitz.open(file_path) as pdf_file:
+        for page_num in range(len(pdf_file)):
+            page = pdf_file[page_num]
+            text += page.get_text()
+    return text
+
+def extract_tables_from_pdf(file_path):
+    tables = []
+    with open(file_path, "rb") as f:
+        reader = PyPDF2.PdfReader(f)
+        for page_num in range(len(reader.pages)):
+            page = reader.pages[page_num]
+            try:
+                df = pd.read_csv(io.BytesIO(page.extract_text().encode()), delimiter="\t", header=None)
+                tables.append(df)
+            except:
+                pass
+    return tables
+
+def search_query_in_text(query, text, context_lines=2):
+    results = []
+    lines = text.split('\n')
+    for i, line in enumerate(lines):
+        if query.lower() in line.lower():
+            start_index = max(0, i - context_lines)
+            end_index = min(len(lines), i + context_lines + 1)
+            relevant_lines = lines[start_index:end_index]
+            results.append('\n'.join(relevant_lines))
+    return results
+
+def search_query_in_tables(query, tables):
+    results = []
+    for table in tables:
+        for row in table.iterrows():
+            for cell in row[1]:
+                if query.lower() in str(cell).lower():
+                    results.append(table.to_string(index=False))
+                    break
+    return results
+
+def main():
+    pdf_file_paths = ['xyz.pdf', 'Data_Analytics_Lab_Manual.pdf1 (1).pdf']  # List of PDF file paths
+    context_lines = 10  # Adjust 
+
+    print("Welcome! I am your PDF reader chatbot.")
+    for pdf_file_path in pdf_file_paths:
+        pdf_text = extract_text_from_pdf(pdf_file_path)
+        pdf_tables = extract_tables_from_pdf(pdf_file_path)
+        print(f"Reading PDF: {pdf_file_path}")
+        
+        while True:
+            query = input("You: ")
+            if query.lower() == 'exit':
+                print("Goodbye!")
+                break
+            
+            relevant_content = []
+            if query.lower() in ["introduction", "summary", "conclusion"]:
+                relevant_content = search_query_in_text(query, pdf_text, context_lines=context_lines)
+            else:
+                relevant_content = search_query_in_text(query, pdf_text)
+                if not relevant_content:
+                    relevant_content = search_query_in_tables(query, pdf_tables)
+
+            if relevant_content:
+                print("Bot: Found relevant information:")
+                for content in relevant_content:
+                    print(content)
+            else:
+                print("Bot: Sorry, I couldn't find relevant information.")
+
+if __name__ == "__main__":
+    main()
